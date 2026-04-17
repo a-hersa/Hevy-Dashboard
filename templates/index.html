@@ -1,0 +1,308 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Workout Tracker</title>
+    <style>
+        body {
+            font-family: sans-serif;
+            max-width: 600px;
+            margin: 60px auto;
+            padding: 0 20px;
+        }
+
+        h1 { margin-bottom: 8px; }
+
+        .upload-area {
+            border: 2px dashed #ccc;
+            border-radius: 8px;
+            padding: 40px;
+            text-align: center;
+            margin: 24px 0;
+            cursor: pointer;
+        }
+
+        .upload-area:hover { border-color: #888; }
+
+        button {
+            background: #111;
+            color: white;
+            border: none;
+            padding: 10px 24px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 16px;
+        }
+
+        button:hover { background: #333; }
+
+        /* Resultado oculto por defecto, JavaScript lo mostrará */
+        #resultado {
+            display: none;
+            margin-top: 24px;
+            padding: 16px;
+            border-radius: 8px;
+            background: #f5f5f5;
+        }
+
+        #resultado.error { background: #fff0f0; }
+
+        .btn-periodo {
+            background: #f0f0f0;
+            color: #111;
+            border: 1px solid #ccc;
+            padding: 6px 12px;
+            border-radius: 6px;
+            cursor: pointer;
+            font-size: 13px;
+        }
+
+        .btn-periodo:hover { background: #e0e0e0; }
+
+        .btn-periodo.activo {
+            background: #111;
+            color: white;
+            border-color: #111;
+        }
+
+    </style>
+</head>
+<body>
+
+    <h1>Hevy Dashboard</h1>
+    <p>Sube tu CSV exportado para añadir entrenamientos a la base de datos.</p>
+
+    <div style="display: flex; align-items: center; gap: 12px; margin: 24px 0;">
+        <button id="btn-seleccionar">Seleccionar CSV</button>
+        <span id="nombre-archivo" style="color: #888; font-size: 14px;">Ningún archivo seleccionado</span>
+        <button id="btn-subir" disabled style="margin-left: auto;">Subir</button>
+    </div>
+    <input type="file" id="csv-input" accept=".csv" style="display:none">
+
+    <div id="resultado"></div>
+
+    <!-- Sección de gráficos -->
+    <div id="seccion-grafico" style="margin-top: 48px;">
+        <h2>Progresión de volumen</h2>
+        <p style="color: #888; font-size: 14px;">Volumen = reps × peso por sesión</p>
+        
+        <select id="selector-ejercicio" style="
+            margin: 16px 0;
+            padding: 8px 12px;
+            font-size: 15px;
+            border: 1px solid #ccc;
+            border-radius: 6px;
+            width: 100%;
+            cursor: pointer;
+        ">
+            <option value="">Cargando ejercicios...</option>
+        </select>
+
+        <!-- Botones de periodo rápido -->
+        <div id="botones-periodo" style="display: flex; gap: 8px; margin-bottom: 12px;">
+            <button class="btn-periodo" data-meses="1">1M</button>
+            <button class="btn-periodo" data-meses="3">3M</button>
+            <button class="btn-periodo" data-meses="6">6M</button>
+            <button class="btn-periodo" data-meses="12">1A</button>
+            <button class="btn-periodo activo" data-meses="0">Todo</button>
+        </div>
+
+        <!-- Selector de fechas personalizado -->
+        <div style="display: flex; align-items: center; gap: 8px; margin-bottom: 16px;">
+            <label style="font-size: 14px; color: #888;">Del</label>
+            <input type="date" id="fecha-inicio" style="padding: 6px; border: 1px solid #ccc; border-radius: 6px;">
+            <label style="font-size: 14px; color: #888;">Al</label>
+            <input type="date" id="fecha-fin" style="padding: 6px; border: 1px solid #ccc; border-radius: 6px;">
+            <button id="btn-aplicar-fechas">Aplicar</button>
+        </div>
+
+        <canvas id="grafico-volumen"></canvas>
+    </div>
+
+    <!-- Chart.js desde CDN, no necesitas instalar nada -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>   
+
+    <script>
+        const input = document.getElementById("csv-input");
+        const area = document.getElementById("upload-area");
+        const btn = document.getElementById("btn-subir");
+        const resultado = document.getElementById("resultado");
+        const nombreArchivo = document.getElementById("nombre-archivo");
+
+        // Click en el área abre el selector de archivos
+        document.getElementById("btn-seleccionar").addEventListener("click", () => input.click());
+
+        // Cuando se selecciona un archivo, activamos el botón
+        input.addEventListener("change", () => {
+            if (input.files.length > 0) {
+                nombreArchivo.textContent = input.files[0].name;
+                btn.disabled = false;
+            }
+        });
+
+        // Click en "Subir"
+        btn.addEventListener("click", async () => {
+            const archivo = input.files[0];
+            if (!archivo) return;
+
+            btn.textContent = "Subiendo...";
+            btn.disabled = true;
+
+            // FormData es la forma de enviar archivos con JavaScript
+            const formData = new FormData();
+            formData.append("csv_file", archivo);
+
+            // fetch() hace una petición HTTP sin recargar la página
+            // Es el JS básico que necesitas aprender para esto
+            const respuesta = await fetch("/upload", {
+                method: "POST",
+                body: formData
+            });
+
+            const datos = await respuesta.json();
+
+            // Mostramos el resultado
+            resultado.style.display = "block";
+
+            if (datos.error) {
+                resultado.className = "error";
+                resultado.innerHTML = `${datos.error}`;
+            } else {
+                resultado.className = "";
+                resultado.innerHTML = `
+                    <strong>Insertadas:</strong> ${datos.insertadas}<br>
+                    <strong>Ignoradas (duplicadas):</strong> ${datos.ignoradas}<br>
+                    <strong>Errores:</strong> ${datos.errores}
+                `;
+            }
+
+            btn.textContent = "Subir";
+            btn.disabled = false;
+        });
+
+        // Variable para guardar la instancia del gráfico
+        // La necesitamos para destruirlo antes de crear uno nuevo
+        let grafico = null;
+
+        // Carga los ejercicios al arrancar la página
+        async function cargarEjercicios() {
+            const respuesta = await fetch("/ejercicios");
+            const lista = await respuesta.json();
+
+            const selector = document.getElementById("selector-ejercicio");
+            selector.innerHTML = '<option value="">Selecciona un ejercicio...</option>';
+
+            lista.forEach(ejercicio => {
+                const option = document.createElement("option");
+                option.value = ejercicio;
+                option.textContent = ejercicio;
+                selector.appendChild(option);
+            });
+        }
+
+        // Estado actual del filtro de fechas
+        let filtroFechas = { inicio: null, fin: null };
+
+        function calcularFechaInicio(meses) {
+            if (meses === 0) return null;  // 0 significa "Todo"
+            const fecha = new Date();
+            fecha.setMonth(fecha.getMonth() - meses);
+            // Devuelve formato YYYY-MM-DD que espera la query SQL
+            return fecha.toISOString().split("T")[0];
+        }
+
+        async function cargarGrafico(ejercicio) {
+            if (!ejercicio) return;
+
+            // Construimos la URL con los parámetros que haya activos
+            let url = `/volumen?ejercicio=${encodeURIComponent(ejercicio)}`;
+            if (filtroFechas.inicio) url += `&fecha_inicio=${filtroFechas.inicio}`;
+            if (filtroFechas.fin)    url += `&fecha_fin=${filtroFechas.fin}`;
+
+            const respuesta = await fetch(url);
+            const datos = await respuesta.json();
+
+            const fechas = datos.map(d => d.fecha);
+            const volumenes = datos.map(d => d.volumen);
+
+            if (grafico) grafico.destroy();
+
+            const ctx = document.getElementById("grafico-volumen").getContext("2d");
+            grafico = new Chart(ctx, {
+                type: "line",
+                data: {
+                    labels: fechas,
+                    datasets: [{
+                        label: `Volumen (kg) — ${ejercicio}`,
+                        data: volumenes,
+                        borderColor: "#111",
+                        backgroundColor: "rgba(0,0,0,0.05)",
+                        borderWidth: 2,
+                        pointRadius: 4,
+                        tension: 0.3
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    plugins: {
+                        legend: { display: false }
+                    },
+                    scales: {
+                        x: { ticks: { maxTicksLimit: 8 } },
+                        y: {
+                            beginAtZero: false,
+                            title: { display: true, text: "Volumen (reps × kg)" }
+                        }
+                    }
+                }
+            });
+        }
+
+        // Selector de ejercicio
+        document.getElementById("selector-ejercicio").addEventListener("change", (e) => {
+            cargarGrafico(e.target.value);
+        });
+
+        // Botones de periodo rápido
+        document.querySelectorAll(".btn-periodo").forEach(btn => {
+            btn.addEventListener("click", () => {
+                // Marcamos el botón activo
+                document.querySelectorAll(".btn-periodo").forEach(b => b.classList.remove("activo"));
+                btn.classList.add("activo");
+
+                const meses = parseInt(btn.dataset.meses);
+                filtroFechas.inicio = calcularFechaInicio(meses);
+                filtroFechas.fin = null;
+
+                // Limpiamos los inputs de fecha personalizada
+                document.getElementById("fecha-inicio").value = "";
+                document.getElementById("fecha-fin").value = "";
+
+                cargarGrafico(document.getElementById("selector-ejercicio").value);
+            });
+        });
+
+        // Selector de fechas personalizado
+        document.getElementById("btn-aplicar-fechas").addEventListener("click", () => {
+            const inicio = document.getElementById("fecha-inicio").value;
+            const fin = document.getElementById("fecha-fin").value;
+
+            if (!inicio && !fin) return;
+
+            // Quitamos el activo de los botones de periodo
+            document.querySelectorAll(".btn-periodo").forEach(b => b.classList.remove("activo"));
+
+            filtroFechas.inicio = inicio || null;
+            filtroFechas.fin = fin || null;
+
+            cargarGrafico(document.getElementById("selector-ejercicio").value);
+        });
+
+        // Arrancamos cargando los ejercicios
+        cargarEjercicios();
+
+    </script>
+
+</body>
+</html>
