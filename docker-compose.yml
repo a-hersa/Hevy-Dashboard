@@ -1,0 +1,9 @@
+services:
+  web:
+    build: .
+    ports:
+      - "5000:5000"
+    volumes:
+      # El volumen persiste la BD fuera del contenedor
+      # Si reconstruyes la imagen no pierdes los datos
+      - ./workouts.db:/app/workouts.db
