@@ -132,4 +132,4 @@ def volumen():
     return jsonify(datos)
 
 if __name__ == "__main__":
-    app.run(debug=True) # debug=True recarga el servidor al guardar cambios
+    app.run(debug=True, host="0.0.0.0") # debug=True recarga el servidor al guardar cambios
